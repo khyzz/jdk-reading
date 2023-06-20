@@ -790,12 +790,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
-     * 判断
+     * 判断map中是否存在指定value
      */
     public boolean containsValue(Object value) {
         Node<K,V>[] tab; V v;
         if ((tab = table) != null && size > 0) {
             for (int i = 0; i < tab.length; ++i) {
+                // 即使是红黑树，也是有next的，寻找指定的value，是不能利用红黑树的特性的
                 for (Node<K,V> e = tab[i]; e != null; e = e.next) {
                     if ((v = e.value) == value ||
                         (value != null && value.equals(v)))
@@ -807,19 +808,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
-     * Returns a {@link Set} view of the keys contained in this map.
-     * The set is backed by the map, so changes to the map are
-     * reflected in the set, and vice-versa.  If the map is modified
-     * while an iteration over the set is in progress (except through
-     * the iterator's own <tt>remove</tt> operation), the results of
-     * the iteration are undefined.  The set supports element removal,
-     * which removes the corresponding mapping from the map, via the
-     * <tt>Iterator.remove</tt>, <tt>Set.remove</tt>,
-     * <tt>removeAll</tt>, <tt>retainAll</tt>, and <tt>clear</tt>
-     * operations.  It does not support the <tt>add</tt> or <tt>addAll</tt>
-     * operations.
-     *
-     * @return a set view of the keys contained in this map
+     * 返回缓存的keySet，keySet本身并不存储任何key，而是使用迭代器遍历全部key
+     * 所谓缓存只是不再新建对象
      */
     public Set<K> keySet() {
         Set<K> ks = keySet;
@@ -858,19 +848,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
-     * Returns a {@link Collection} view of the values contained in this map.
-     * The collection is backed by the map, so changes to the map are
-     * reflected in the collection, and vice-versa.  If the map is
-     * modified while an iteration over the collection is in progress
-     * (except through the iterator's own <tt>remove</tt> operation),
-     * the results of the iteration are undefined.  The collection
-     * supports element removal, which removes the corresponding
-     * mapping from the map, via the <tt>Iterator.remove</tt>,
-     * <tt>Collection.remove</tt>, <tt>removeAll</tt>,
-     * <tt>retainAll</tt> and <tt>clear</tt> operations.  It does not
-     * support the <tt>add</tt> or <tt>addAll</tt> operations.
-     *
-     * @return a view of the values contained in this map
+     * 与keySet类似
      */
     public Collection<V> values() {
         Collection<V> vs = values;
@@ -906,20 +884,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
-     * Returns a {@link Set} view of the mappings contained in this map.
-     * The set is backed by the map, so changes to the map are
-     * reflected in the set, and vice-versa.  If the map is modified
-     * while an iteration over the set is in progress (except through
-     * the iterator's own <tt>remove</tt> operation, or through the
-     * <tt>setValue</tt> operation on a map entry returned by the
-     * iterator) the results of the iteration are undefined.  The set
-     * supports element removal, which removes the corresponding
-     * mapping from the map, via the <tt>Iterator.remove</tt>,
-     * <tt>Set.remove</tt>, <tt>removeAll</tt>, <tt>retainAll</tt> and
-     * <tt>clear</tt> operations.  It does not support the
-     * <tt>add</tt> or <tt>addAll</tt> operations.
-     *
-     * @return a set view of the mappings contained in this map
+     * 与keySet、values类似.
      */
     public Set<Map.Entry<K,V>> entrySet() {
         Set<Map.Entry<K,V>> es;
@@ -970,12 +935,18 @@ public class HashMap<K,V> extends AbstractMap<K,V>
 
     // Overrides of JDK8 Map extension methods
 
+    /**
+     * 如果key对应的value为空，则返回指定的默认value
+     */
     @Override
     public V getOrDefault(Object key, V defaultValue) {
         Node<K,V> e;
         return (e = getNode(hash(key), key)) == null ? defaultValue : e.value;
     }
 
+    /**
+     * 如果key不存在，就添加，如果已经存在了，不覆盖
+     */
     @Override
     public V putIfAbsent(K key, V value) {
         return putVal(hash(key), key, value, true, true);
@@ -986,6 +957,9 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         return removeNode(hash(key), key, value, true, true) != null;
     }
 
+    /**
+     * 如果key对应的value是期望值，则更新未新value值
+     */
     @Override
     public boolean replace(K key, V oldValue, V newValue) {
         Node<K,V> e; V v;
@@ -998,6 +972,9 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         return false;
     }
 
+    /**
+     * 有则替换
+     */
     @Override
     public V replace(K key, V value) {
         Node<K,V> e;
@@ -1137,6 +1114,10 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         return v;
     }
 
+    /**
+     * 如果key对应的value为null，则等同于 put(key, value)
+     * 如果key已经存在，则根据传参的函数更新value值
+     */
     @Override
     public V merge(K key, V value,
                    BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
