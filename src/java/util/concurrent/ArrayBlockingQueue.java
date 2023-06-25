@@ -45,61 +45,25 @@ import java.util.Spliterators;
 import java.util.Spliterator;
 
 /**
- * A bounded {@linkplain BlockingQueue blocking queue} backed by an
- * array.  This queue orders elements FIFO (first-in-first-out).  The
- * <em>head</em> of the queue is that element that has been on the
- * queue the longest time.  The <em>tail</em> of the queue is that
- * element that has been on the queue the shortest time. New elements
- * are inserted at the tail of the queue, and the queue retrieval
- * operations obtain elements at the head of the queue.
- *
- * <p>This is a classic &quot;bounded buffer&quot;, in which a
- * fixed-sized array holds elements inserted by producers and
- * extracted by consumers.  Once created, the capacity cannot be
- * changed.  Attempts to {@code put} an element into a full queue
- * will result in the operation blocking; attempts to {@code take} an
- * element from an empty queue will similarly block.
- *
- * <p>This class supports an optional fairness policy for ordering
- * waiting producer and consumer threads.  By default, this ordering
- * is not guaranteed. However, a queue constructed with fairness set
- * to {@code true} grants threads access in FIFO order. Fairness
- * generally decreases throughput but reduces variability and avoids
- * starvation.
- *
- * <p>This class and its iterator implement all of the
- * <em>optional</em> methods of the {@link Collection} and {@link
- * Iterator} interfaces.
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @since 1.5
- * @author Doug Lea
- * @param <E> the type of elements held in this collection
+ * 有界队列
  */
+@SuppressWarnings("all")
 public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         implements BlockingQueue<E>, java.io.Serializable {
 
-    /**
-     * Serialization ID. This class relies on default serialization
-     * even for the items array, which is default-serialized, even if
-     * it is empty. Otherwise it could not be declared final, which is
-     * necessary here.
-     */
+
     private static final long serialVersionUID = -817911632652898426L;
 
-    /** The queued items */
+    /** 队列中元素保存的地方 */
     final Object[] items;
 
-    /** items index for next take, poll, peek or remove */
+    /** 下个被取出的索引 */
     int takeIndex;
 
-    /** items index for next put, offer, or add */
+    /** 下个被存入的索引 */
     int putIndex;
 
-    /** Number of elements in the queue */
+    /** 队列元素个数 */
     int count;
 
     /*
@@ -107,13 +71,13 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      * found in any textbook.
      */
 
-    /** Main lock guarding all access */
+    /** 主锁 */
     final ReentrantLock lock;
 
-    /** Condition for waiting takes */
+    /** 取出锁 */
     private final Condition notEmpty;
 
-    /** Condition for waiting puts */
+    /** 存入锁 */
     private final Condition notFull;
 
     /**
@@ -141,9 +105,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Throws NullPointerException if argument is null.
-     *
-     * @param v the element
+     * 检查元素是否为null
      */
     private static void checkNotNull(Object v) {
         if (v == null)
@@ -151,8 +113,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts element at current put position, advances, and signals.
-     * Call only when holding lock.
+     * 入队
      */
     private void enqueue(E x) {
         // assert lock.getHoldCount() == 1;
@@ -162,12 +123,12 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         if (++putIndex == items.length)
             putIndex = 0;
         count++;
+        // 入队成功则一定非空
         notEmpty.signal();
     }
 
     /**
-     * Extracts element at current take position, advances, and signals.
-     * Call only when holding lock.
+     * 出队
      */
     private E dequeue() {
         // assert lock.getHoldCount() == 1;
@@ -181,6 +142,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         count--;
         if (itrs != null)
             itrs.elementDequeued();
+        // 出队成功则一定非满
         notFull.signal();
         return x;
     }
@@ -229,25 +191,14 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity and default access policy.
-     *
-     * @param capacity the capacity of this queue
-     * @throws IllegalArgumentException if {@code capacity < 1}
+     * 只指定容量、则使用非公平锁
      */
     public ArrayBlockingQueue(int capacity) {
         this(capacity, false);
     }
 
     /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity and the specified access policy.
-     *
-     * @param capacity the capacity of this queue
-     * @param fair if {@code true} then queue accesses for threads blocked
-     *        on insertion or removal, are processed in FIFO order;
-     *        if {@code false} the access order is unspecified.
-     * @throws IllegalArgumentException if {@code capacity < 1}
+     * 指定容量、同时指定是否使用公平锁
      */
     public ArrayBlockingQueue(int capacity, boolean fair) {
         if (capacity <= 0)
@@ -259,23 +210,11 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity, the specified access policy and initially containing the
-     * elements of the given collection,
-     * added in traversal order of the collection's iterator.
-     *
-     * @param capacity the capacity of this queue
-     * @param fair if {@code true} then queue accesses for threads blocked
-     *        on insertion or removal, are processed in FIFO order;
-     *        if {@code false} the access order is unspecified.
-     * @param c the collection of elements to initially contain
-     * @throws IllegalArgumentException if {@code capacity} is less than
-     *         {@code c.size()}, or less than 1.
-     * @throws NullPointerException if the specified collection or any
-     *         of its elements are null
+     * 指定容量、是否使用公平锁，同时传一个集合
      */
     public ArrayBlockingQueue(int capacity, boolean fair,
                               Collection<? extends E> c) {
+        // 先将数组和锁创建好
         this(capacity, fair);
 
         final ReentrantLock lock = this.lock;
@@ -283,6 +222,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         try {
             int i = 0;
             try {
+                // 将集合中的元素放进数组
                 for (E e : c) {
                     checkNotNull(e);
                     items[i++] = e;
@@ -291,6 +231,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 throw new IllegalArgumentException();
             }
             count = i;
+            // 计算下一个存入的位置，如果已经达到容量了，则从0位置开始存放
             putIndex = (i == capacity) ? 0 : i;
         } finally {
             lock.unlock();
@@ -298,28 +239,14 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts the specified element at the tail of this queue if it is
-     * possible to do so immediately without exceeding the queue's capacity,
-     * returning {@code true} upon success and throwing an
-     * {@code IllegalStateException} if this queue is full.
-     *
-     * @param e the element to add
-     * @return {@code true} (as specified by {@link Collection#add})
-     * @throws IllegalStateException if this queue is full
-     * @throws NullPointerException if the specified element is null
+     * 本质上还是调用offer方法
      */
     public boolean add(E e) {
         return super.add(e);
     }
 
     /**
-     * Inserts the specified element at the tail of this queue if it is
-     * possible to do so immediately without exceeding the queue's capacity,
-     * returning {@code true} upon success and {@code false} if this queue
-     * is full.  This method is generally preferable to method {@link #add},
-     * which can fail to insert an element only by throwing an exception.
-     *
-     * @throws NullPointerException if the specified element is null
+     * 入队成功返回true， 否则false
      */
     public boolean offer(E e) {
         checkNotNull(e);
@@ -338,11 +265,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts the specified element at the tail of this queue, waiting
-     * for space to become available if the queue is full.
-     *
-     * @throws InterruptedException {@inheritDoc}
-     * @throws NullPointerException {@inheritDoc}
+     * 入队，如果队列已满，等待
      */
     public void put(E e) throws InterruptedException {
         checkNotNull(e);
@@ -358,12 +281,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts the specified element at the tail of this queue, waiting
-     * up to the specified wait time for space to become available if
-     * the queue is full.
-     *
-     * @throws InterruptedException {@inheritDoc}
-     * @throws NullPointerException {@inheritDoc}
+     * 入队，如果队列已满，等待指定时间
      */
     public boolean offer(E e, long timeout, TimeUnit unit)
         throws InterruptedException {
