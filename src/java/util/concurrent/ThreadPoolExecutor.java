@@ -327,6 +327,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             for (Worker w : workers) {
                 Thread t = w.thread;
+                // 正在执行任务的线程，已经获取了锁，这里的tryLock获取不到
                 if (!t.isInterrupted() && w.tryLock()) {
                     try {
                         t.interrupt();
@@ -344,7 +345,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * 中断全部线程
+     * 中断空闲线程
      */
     private void interruptIdleWorkers() {
         interruptIdleWorkers(false);
@@ -837,11 +838,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Sets the thread factory used to create new threads.
-     *
-     * @param threadFactory the new thread factory
-     * @throws NullPointerException if threadFactory is null
-     * @see #getThreadFactory
+     * 设置线程工厂
      */
     public void setThreadFactory(ThreadFactory threadFactory) {
         if (threadFactory == null)
@@ -855,11 +852,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Sets a new handler for unexecutable tasks.
-     *
-     * @param handler the new handler
-     * @throws NullPointerException if handler is null
-     * @see #getRejectedExecutionHandler
+     * 设置拒绝策略
      */
     public void setRejectedExecutionHandler(RejectedExecutionHandler handler) {
         if (handler == null)
@@ -868,38 +861,25 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns the current handler for unexecutable tasks.
-     *
-     * @return the current handler
-     * @see #setRejectedExecutionHandler(RejectedExecutionHandler)
+     * 返回拒绝策略
      */
     public RejectedExecutionHandler getRejectedExecutionHandler() {
         return handler;
     }
 
     /**
-     * Sets the core number of threads.  This overrides any value set
-     * in the constructor.  If the new value is smaller than the
-     * current value, excess existing threads will be terminated when
-     * they next become idle.  If larger, new threads will, if needed,
-     * be started to execute any queued tasks.
-     *
-     * @param corePoolSize the new core size
-     * @throws IllegalArgumentException if {@code corePoolSize < 0}
-     * @see #getCorePoolSize
+     * 设置核心线程大小
      */
     public void setCorePoolSize(int corePoolSize) {
         if (corePoolSize < 0)
             throw new IllegalArgumentException();
         int delta = corePoolSize - this.corePoolSize;
         this.corePoolSize = corePoolSize;
+        // 调小核心线程数，中断空闲的线程
         if (workerCountOf(ctl.get()) > corePoolSize)
             interruptIdleWorkers();
         else if (delta > 0) {
-            // We don't really know how many new threads are "needed".
-            // As a heuristic, prestart enough new workers (up to new
-            // core size) to handle the current number of tasks in
-            // queue, but stop if queue becomes empty while doing so.
+            // 调大核心线程数，比较差值和任务队列的大小，添加较小个数的核心线程
             int k = Math.min(delta, workQueue.size());
             while (k-- > 0 && addWorker(null, true)) {
                 if (workQueue.isEmpty())
@@ -909,10 +889,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns the core number of threads.
-     *
-     * @return the core number of threads
-     * @see #setCorePoolSize
+     * 返回核心线程数大小
      */
     public int getCorePoolSize() {
         return corePoolSize;
@@ -958,38 +935,14 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns true if this pool allows core threads to time out and
-     * terminate if no tasks arrive within the keepAlive time, being
-     * replaced if needed when new tasks arrive. When true, the same
-     * keep-alive policy applying to non-core threads applies also to
-     * core threads. When false (the default), core threads are never
-     * terminated due to lack of incoming tasks.
-     *
-     * @return {@code true} if core threads are allowed to time out,
-     *         else {@code false}
-     *
-     * @since 1.6
+     * 返回是否允许回收核心线程
      */
     public boolean allowsCoreThreadTimeOut() {
         return allowCoreThreadTimeOut;
     }
 
     /**
-     * Sets the policy governing whether core threads may time out and
-     * terminate if no tasks arrive within the keep-alive time, being
-     * replaced if needed when new tasks arrive. When false, core
-     * threads are never terminated due to lack of incoming
-     * tasks. When true, the same keep-alive policy applying to
-     * non-core threads applies also to core threads. To avoid
-     * continual thread replacement, the keep-alive time must be
-     * greater than zero when setting {@code true}. This method
-     * should in general be called before the pool is actively used.
-     *
-     * @param value {@code true} if should time out, else {@code false}
-     * @throws IllegalArgumentException if value is {@code true}
-     *         and the current keep-alive time is not greater than zero
-     *
-     * @since 1.6
+     * 设置是否允许回收核心线程
      */
     public void allowCoreThreadTimeOut(boolean value) {
         if (value && keepAliveTime <= 0)
@@ -1002,16 +955,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Sets the maximum allowed number of threads. This overrides any
-     * value set in the constructor. If the new value is smaller than
-     * the current value, excess existing threads will be
-     * terminated when they next become idle.
-     *
-     * @param maximumPoolSize the new maximum
-     * @throws IllegalArgumentException if the new maximum is
-     *         less than or equal to zero, or
-     *         less than the {@linkplain #getCorePoolSize core pool size}
-     * @see #getMaximumPoolSize
+     * 设置线程池最大数量
      */
     public void setMaximumPoolSize(int maximumPoolSize) {
         if (maximumPoolSize <= 0 || maximumPoolSize < corePoolSize)
@@ -1022,28 +966,14 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns the maximum allowed number of threads.
-     *
-     * @return the maximum allowed number of threads
-     * @see #setMaximumPoolSize
+     * 获取线程池最大数量
      */
     public int getMaximumPoolSize() {
         return maximumPoolSize;
     }
 
     /**
-     * Sets the time limit for which threads may remain idle before
-     * being terminated.  If there are more than the core number of
-     * threads currently in the pool, after waiting this amount of
-     * time without processing a task, excess threads will be
-     * terminated.  This overrides any value set in the constructor.
-     *
-     * @param time the time to wait.  A time value of zero will cause
-     *        excess threads to terminate immediately after executing tasks.
-     * @param unit the time unit of the {@code time} argument
-     * @throws IllegalArgumentException if {@code time} less than zero or
-     *         if {@code time} is zero and {@code allowsCoreThreadTimeOut}
-     * @see #getKeepAliveTime(TimeUnit)
+     * 设置线程空闲等待时间
      */
     public void setKeepAliveTime(long time, TimeUnit unit) {
         if (time < 0)
@@ -1058,13 +988,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns the thread keep-alive time, which is the amount of time
-     * that threads in excess of the core pool size may remain
-     * idle before being terminated.
-     *
-     * @param unit the desired time unit of the result
-     * @return the time limit
-     * @see #setKeepAliveTime(long, TimeUnit)
+     * 返回线程空闲等待时间
      */
     public long getKeepAliveTime(TimeUnit unit) {
         return unit.convert(keepAliveTime, TimeUnit.NANOSECONDS);
@@ -1140,9 +1064,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     /* Statistics */
 
     /**
-     * Returns the current number of threads in the pool.
-     *
-     * @return the number of threads
+     * 返回线程池线程个数
      */
     public int getPoolSize() {
         final ReentrantLock mainLock = this.mainLock;
@@ -1158,10 +1080,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns the approximate number of threads that are actively
-     * executing tasks.
-     *
-     * @return the number of threads
+     * 返回正在执行任务的线程个数
      */
     public int getActiveCount() {
         final ReentrantLock mainLock = this.mainLock;
@@ -1178,10 +1097,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Returns the largest number of threads that have ever
-     * simultaneously been in the pool.
-     *
-     * @return the number of threads
+     * 返回曾经最大的线程个数
      */
     public int getLargestPoolSize() {
         final ReentrantLock mainLock = this.mainLock;
@@ -1299,24 +1215,13 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     /* Predefined RejectedExecutionHandlers */
 
     /**
-     * A handler for rejected tasks that runs the rejected task
-     * directly in the calling thread of the {@code execute} method,
-     * unless the executor has been shut down, in which case the task
-     * is discarded.
+     * 让调用线程执行任务
      */
     public static class CallerRunsPolicy implements RejectedExecutionHandler {
-        /**
-         * Creates a {@code CallerRunsPolicy}.
-         */
+
         public CallerRunsPolicy() { }
 
-        /**
-         * Executes task r in the caller's thread, unless the executor
-         * has been shut down, in which case the task is discarded.
-         *
-         * @param r the runnable task requested to be executed
-         * @param e the executor attempting to execute this task
-         */
+
         public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
             if (!e.isShutdown()) {
                 r.run();
@@ -1325,22 +1230,13 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * A handler for rejected tasks that throws a
-     * {@code RejectedExecutionException}.
+     * 抛出异常
      */
     public static class AbortPolicy implements RejectedExecutionHandler {
-        /**
-         * Creates an {@code AbortPolicy}.
-         */
+
         public AbortPolicy() { }
 
-        /**
-         * Always throws RejectedExecutionException.
-         *
-         * @param r the runnable task requested to be executed
-         * @param e the executor attempting to execute this task
-         * @throws RejectedExecutionException always
-         */
+
         public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
             throw new RejectedExecutionException("Task " + r.toString() +
                                                  " rejected from " +
@@ -1349,45 +1245,23 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * A handler for rejected tasks that silently discards the
-     * rejected task.
+     * 不处理
      */
     public static class DiscardPolicy implements RejectedExecutionHandler {
-        /**
-         * Creates a {@code DiscardPolicy}.
-         */
+
         public DiscardPolicy() { }
 
-        /**
-         * Does nothing, which has the effect of discarding task r.
-         *
-         * @param r the runnable task requested to be executed
-         * @param e the executor attempting to execute this task
-         */
         public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
         }
     }
 
     /**
-     * A handler for rejected tasks that discards the oldest unhandled
-     * request and then retries {@code execute}, unless the executor
-     * is shut down, in which case the task is discarded.
+     * 丢弃存在时间最久的任务
      */
     public static class DiscardOldestPolicy implements RejectedExecutionHandler {
-        /**
-         * Creates a {@code DiscardOldestPolicy} for the given executor.
-         */
+
         public DiscardOldestPolicy() { }
 
-        /**
-         * Obtains and ignores the next task that the executor
-         * would otherwise execute, if one is immediately available,
-         * and then retries execution of task r, unless the executor
-         * is shut down, in which case task r is instead discarded.
-         *
-         * @param r the runnable task requested to be executed
-         * @param e the executor attempting to execute this task
-         */
         public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
             if (!e.isShutdown()) {
                 e.getQueue().poll();
