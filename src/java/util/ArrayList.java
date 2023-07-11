@@ -115,13 +115,14 @@ public class ArrayList<E> extends AbstractList<E>
     }
 
     /**
-     * 内部使用的判断容量是否满足本次添加元素
+     * 判断容量是否满足本次添加元素（内部使用）
      */
     private void ensureCapacityInternal(int minCapacity) {
         ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
     }
 
     private void ensureExplicitCapacity(int minCapacity) {
+        // 操作次数 + 1
         modCount++;
 
         // 如果所需的最小容量未超过数组长度，就不扩容
@@ -140,10 +141,12 @@ public class ArrayList<E> extends AbstractList<E>
     private void grow(int minCapacity) {
         // overflow-conscious code
         int oldCapacity = elementData.length;
-        // 1.5倍
+        // 扩容至1.5倍（不准确的1.5倍） 10 -> 15  15 -> 22
         int newCapacity = oldCapacity + (oldCapacity >> 1);
+        // 新容量小于最小容量，则拿最小容量赋值给新容量(溢出、或者添加元素过多)
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
+        // 新容量已经超过了最大容量，根据最小容量计算出扩容得容量
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
         // minCapacity is usually close to size, so this is a win:
@@ -153,6 +156,7 @@ public class ArrayList<E> extends AbstractList<E>
     private static int hugeCapacity(int minCapacity) {
         if (minCapacity < 0) // overflow
             throw new OutOfMemoryError();
+        // 这里可能超过最大容量
         return (minCapacity > MAX_ARRAY_SIZE) ?
             Integer.MAX_VALUE :
             MAX_ARRAY_SIZE;
@@ -278,6 +282,7 @@ public class ArrayList<E> extends AbstractList<E>
      * 添加元素
      */
     public boolean add(E e) {
+        // 保证数组长度足够添加指定元素
         ensureCapacityInternal(size + 1);  // Increments modCount!!
         elementData[size++] = e;
         return true;
@@ -541,7 +546,7 @@ public class ArrayList<E> extends AbstractList<E>
     }
 
     /**
-     * 迭代器
+     * 指定位置的迭代器
      */
     public ListIterator<E> listIterator(int index) {
         if (index < 0 || index > size)
@@ -550,58 +555,61 @@ public class ArrayList<E> extends AbstractList<E>
     }
 
     /**
-     *
+     * 迭代器
      */
     public ListIterator<E> listIterator() {
         return new ListItr(0);
     }
 
     /**
-     * Returns an iterator over the elements in this list in proper sequence.
-     *
-     * <p>The returned iterator is <a href="#fail-fast"><i>fail-fast</i></a>.
-     *
-     * @return an iterator over the elements in this list in proper sequence
+     * 迭代器
      */
     public Iterator<E> iterator() {
         return new Itr();
     }
 
     /**
-     * An optimized version of AbstractList.Itr
+     * 迭代器
      */
     private class Itr implements Iterator<E> {
-        int cursor;       // index of next element to return
+        int cursor;       // 指向下一个元素的索引
         int lastRet = -1; // index of last element returned; -1 if no such
         int expectedModCount = modCount;
 
         Itr() {}
 
         public boolean hasNext() {
+            // 索引达到了数组的最后
             return cursor != size;
         }
 
         @SuppressWarnings("unchecked")
         public E next() {
+            // 检查list结构是否发生改变，并发问题
             checkForComodification();
             int i = cursor;
+            // 使用next前，用hasNext检查
             if (i >= size)
                 throw new NoSuchElementException();
             Object[] elementData = ArrayList.this.elementData;
+            // 再次检查
             if (i >= elementData.length)
                 throw new ConcurrentModificationException();
             cursor = i + 1;
+            // lastRet已经被赋值了
             return (E) elementData[lastRet = i];
         }
 
         public void remove() {
             if (lastRet < 0)
                 throw new IllegalStateException();
+            // 并发问题检查
             checkForComodification();
 
             try {
                 ArrayList.this.remove(lastRet);
                 cursor = lastRet;
+                // lastRet复位
                 lastRet = -1;
                 expectedModCount = modCount;
             } catch (IndexOutOfBoundsException ex) {
@@ -638,9 +646,10 @@ public class ArrayList<E> extends AbstractList<E>
     }
 
     /**
-     * An optimized version of AbstractList.ListItr
+     * List迭代器，相较于普通迭代器，更强大
      */
     private class ListItr extends Itr implements ListIterator<E> {
+        // 可以指定开始位置
         ListItr(int index) {
             super();
             cursor = index;
@@ -698,9 +707,7 @@ public class ArrayList<E> extends AbstractList<E>
         }
     }
 
-    /**
-     *
-     */
+
     public List<E> subList(int fromIndex, int toIndex) {
         subListRangeCheck(fromIndex, toIndex, size);
         return new SubList(this, 0, fromIndex, toIndex);
@@ -963,17 +970,7 @@ public class ArrayList<E> extends AbstractList<E>
     }
 
     /**
-     * Creates a <em><a href="Spliterator.html#binding">late-binding</a></em>
-     * and <em>fail-fast</em> {@link Spliterator} over the elements in this
-     * list.
      *
-     * <p>The {@code Spliterator} reports {@link Spliterator#SIZED},
-     * {@link Spliterator#SUBSIZED}, and {@link Spliterator#ORDERED}.
-     * Overriding implementations should document the reporting of additional
-     * characteristic values.
-     *
-     * @return a {@code Spliterator} over the elements in this list
-     * @since 1.8
      */
     @Override
     public Spliterator<E> spliterator() {
@@ -983,37 +980,6 @@ public class ArrayList<E> extends AbstractList<E>
     /** Index-based split-by-two, lazily initialized Spliterator */
     static final class ArrayListSpliterator<E> implements Spliterator<E> {
 
-        /*
-         * If ArrayLists were immutable, or structurally immutable (no
-         * adds, removes, etc), we could implement their spliterators
-         * with Arrays.spliterator. Instead we detect as much
-         * interference during traversal as practical without
-         * sacrificing much performance. We rely primarily on
-         * modCounts. These are not guaranteed to detect concurrency
-         * violations, and are sometimes overly conservative about
-         * within-thread interference, but detect enough problems to
-         * be worthwhile in practice. To carry this out, we (1) lazily
-         * initialize fence and expectedModCount until the latest
-         * point that we need to commit to the state we are checking
-         * against; thus improving precision.  (This doesn't apply to
-         * SubLists, that create spliterators with current non-lazy
-         * values).  (2) We perform only a single
-         * ConcurrentModificationException check at the end of forEach
-         * (the most performance-sensitive method). When using forEach
-         * (as opposed to iterators), we can normally only detect
-         * interference after actions, not before. Further
-         * CME-triggering checks apply to all other possible
-         * violations of assumptions for example null or too-small
-         * elementData array given its size(), that could only have
-         * occurred due to interference.  This allows the inner loop
-         * of forEach to run without any further checks, and
-         * simplifies lambda-resolution. While this does entail a
-         * number of checks, note that in the common case of
-         * list.stream().forEach(a), no checks or other computation
-         * occur anywhere other than inside forEach itself.  The other
-         * less-often-used methods cannot take advantage of most of
-         * these streamlinings.
-         */
 
         private final ArrayList<E> list;
         private int index; // current index, modified on advance/split
