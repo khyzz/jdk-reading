@@ -1,240 +1,27 @@
-/*
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
-
-/*
- * This file is available under and governed by the GNU General Public
- * License version 2 only, as published by the Free Software Foundation.
- * However, the following notice accompanied the original version of this
- * file:
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent.locks;
 import java.util.concurrent.TimeUnit;
 import java.util.Collection;
 
-/**
- * An implementation of {@link ReadWriteLock} supporting similar
- * semantics to {@link ReentrantLock}.
- * <p>This class has the following properties:
- *
- * <ul>
- * <li><b>Acquisition order</b>
- *
- * <p>This class does not impose a reader or writer preference
- * ordering for lock access.  However, it does support an optional
- * <em>fairness</em> policy.
- *
- * <dl>
- * <dt><b><i>Non-fair mode (default)</i></b>
- * <dd>When constructed as non-fair (the default), the order of entry
- * to the read and write lock is unspecified, subject to reentrancy
- * constraints.  A nonfair lock that is continuously contended may
- * indefinitely postpone one or more reader or writer threads, but
- * will normally have higher throughput than a fair lock.
- *
- * <dt><b><i>Fair mode</i></b>
- * <dd>When constructed as fair, threads contend for entry using an
- * approximately arrival-order policy. When the currently held lock
- * is released, either the longest-waiting single writer thread will
- * be assigned the write lock, or if there is a group of reader threads
- * waiting longer than all waiting writer threads, that group will be
- * assigned the read lock.
- *
- * <p>A thread that tries to acquire a fair read lock (non-reentrantly)
- * will block if either the write lock is held, or there is a waiting
- * writer thread. The thread will not acquire the read lock until
- * after the oldest currently waiting writer thread has acquired and
- * released the write lock. Of course, if a waiting writer abandons
- * its wait, leaving one or more reader threads as the longest waiters
- * in the queue with the write lock free, then those readers will be
- * assigned the read lock.
- *
- * <p>A thread that tries to acquire a fair write lock (non-reentrantly)
- * will block unless both the read lock and write lock are free (which
- * implies there are no waiting threads).  (Note that the non-blocking
- * {@link ReadLock#tryLock()} and {@link WriteLock#tryLock()} methods
- * do not honor this fair setting and will immediately acquire the lock
- * if it is possible, regardless of waiting threads.)
- * <p>
- * </dl>
- *
- * <li><b>Reentrancy</b>
- *
- * <p>This lock allows both readers and writers to reacquire read or
- * write locks in the style of a {@link ReentrantLock}. Non-reentrant
- * readers are not allowed until all write locks held by the writing
- * thread have been released.
- *
- * <p>Additionally, a writer can acquire the read lock, but not
- * vice-versa.  Among other applications, reentrancy can be useful
- * when write locks are held during calls or callbacks to methods that
- * perform reads under read locks.  If a reader tries to acquire the
- * write lock it will never succeed.
- *
- * <li><b>Lock downgrading</b>
- * <p>Reentrancy also allows downgrading from the write lock to a read lock,
- * by acquiring the write lock, then the read lock and then releasing the
- * write lock. However, upgrading from a read lock to the write lock is
- * <b>not</b> possible.
- *
- * <li><b>Interruption of lock acquisition</b>
- * <p>The read lock and write lock both support interruption during lock
- * acquisition.
- *
- * <li><b>{@link Condition} support</b>
- * <p>The write lock provides a {@link Condition} implementation that
- * behaves in the same way, with respect to the write lock, as the
- * {@link Condition} implementation provided by
- * {@link ReentrantLock#newCondition} does for {@link ReentrantLock}.
- * This {@link Condition} can, of course, only be used with the write lock.
- *
- * <p>The read lock does not support a {@link Condition} and
- * {@code readLock().newCondition()} throws
- * {@code UnsupportedOperationException}.
- *
- * <li><b>Instrumentation</b>
- * <p>This class supports methods to determine whether locks
- * are held or contended. These methods are designed for monitoring
- * system state, not for synchronization control.
- * </ul>
- *
- * <p>Serialization of this class behaves in the same way as built-in
- * locks: a deserialized lock is in the unlocked state, regardless of
- * its state when serialized.
- *
- * <p><b>Sample usages</b>. Here is a code sketch showing how to perform
- * lock downgrading after updating a cache (exception handling is
- * particularly tricky when handling multiple locks in a non-nested
- * fashion):
- *
- * <pre> {@code
- * class CachedData {
- *   Object data;
- *   volatile boolean cacheValid;
- *   final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
- *
- *   void processCachedData() {
- *     rwl.readLock().lock();
- *     if (!cacheValid) {
- *       // Must release read lock before acquiring write lock
- *       rwl.readLock().unlock();
- *       rwl.writeLock().lock();
- *       try {
- *         // Recheck state because another thread might have
- *         // acquired write lock and changed state before we did.
- *         if (!cacheValid) {
- *           data = ...
- *           cacheValid = true;
- *         }
- *         // Downgrade by acquiring read lock before releasing write lock
- *         rwl.readLock().lock();
- *       } finally {
- *         rwl.writeLock().unlock(); // Unlock write, still hold read
- *       }
- *     }
- *
- *     try {
- *       use(data);
- *     } finally {
- *       rwl.readLock().unlock();
- *     }
- *   }
- * }}</pre>
- *
- * ReentrantReadWriteLocks can be used to improve concurrency in some
- * uses of some kinds of Collections. This is typically worthwhile
- * only when the collections are expected to be large, accessed by
- * more reader threads than writer threads, and entail operations with
- * overhead that outweighs synchronization overhead. For example, here
- * is a class using a TreeMap that is expected to be large and
- * concurrently accessed.
- *
- *  <pre> {@code
- * class RWDictionary {
- *   private final Map<String, Data> m = new TreeMap<String, Data>();
- *   private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
- *   private final Lock r = rwl.readLock();
- *   private final Lock w = rwl.writeLock();
- *
- *   public Data get(String key) {
- *     r.lock();
- *     try { return m.get(key); }
- *     finally { r.unlock(); }
- *   }
- *   public String[] allKeys() {
- *     r.lock();
- *     try { return m.keySet().toArray(); }
- *     finally { r.unlock(); }
- *   }
- *   public Data put(String key, Data value) {
- *     w.lock();
- *     try { return m.put(key, value); }
- *     finally { w.unlock(); }
- *   }
- *   public void clear() {
- *     w.lock();
- *     try { m.clear(); }
- *     finally { w.unlock(); }
- *   }
- * }}</pre>
- *
- * <h3>Implementation Notes</h3>
- *
- * <p>This lock supports a maximum of 65535 recursive write locks
- * and 65535 read locks. Attempts to exceed these limits result in
- * {@link Error} throws from locking methods.
- *
- * @since 1.5
- * @author Doug Lea
- */
+@SuppressWarnings("all")
 public class ReentrantReadWriteLock
         implements ReadWriteLock, java.io.Serializable {
     private static final long serialVersionUID = -6992448646407690164L;
-    /** Inner class providing readlock */
+    /** 内部类提供读锁 */
     private final ReentrantReadWriteLock.ReadLock readerLock;
-    /** Inner class providing writelock */
+    /** 内部类提供写锁 */
     private final ReentrantReadWriteLock.WriteLock writerLock;
     /** Performs all synchronization mechanics */
     final Sync sync;
 
     /**
-     * Creates a new {@code ReentrantReadWriteLock} with
-     * default (nonfair) ordering properties.
+     * 默认是非公平锁
      */
     public ReentrantReadWriteLock() {
         this(false);
     }
 
     /**
-     * Creates a new {@code ReentrantReadWriteLock} with
-     * the given fairness policy.
-     *
-     * @param fair {@code true} if this lock should use a fair ordering policy
+     * 根据入参创建公平锁或者非公平锁
      */
     public ReentrantReadWriteLock(boolean fair) {
         sync = fair ? new FairSync() : new NonfairSync();
@@ -246,18 +33,11 @@ public class ReentrantReadWriteLock
     public ReentrantReadWriteLock.ReadLock  readLock()  { return readerLock; }
 
     /**
-     * Synchronization implementation for ReentrantReadWriteLock.
-     * Subclassed into fair and nonfair versions.
+     * 抽象锁父类
      */
     abstract static class Sync extends AbstractQueuedSynchronizer {
         private static final long serialVersionUID = 6317671515068378041L;
 
-        /*
-         * Read vs write count extraction constants and functions.
-         * Lock state is logically divided into two unsigned shorts:
-         * The lower one representing the exclusive (writer) lock hold count,
-         * and the upper the shared (reader) hold count.
-         */
 
         static final int SHARED_SHIFT   = 16;
         static final int SHARED_UNIT    = (1 << SHARED_SHIFT);

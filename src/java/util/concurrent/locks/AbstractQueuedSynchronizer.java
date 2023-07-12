@@ -71,11 +71,11 @@ public abstract class AbstractQueuedSynchronizer
 
         /**
          * 当前节点状态
-         *   -1:     后继节点需要被唤醒时当前节点状态
-         *   1:  节点由于超时或者被中断时的状态
-         *   -2:  当节点进入condition队列时的状态
-         *   -3:  释放共享锁时头节点的状态
-         *   0:          节点初始化时的状态
+         *   -1:    后继节点需要被唤醒时当前节点状态
+         *    1:    节点由于超时或者被中断时的状态
+         *   -2:    当节点进入condition队列时的状态
+         *   -3:    释放共享锁时头节点的状态
+         *   0:     节点初始化时的状态
          */
         volatile int waitStatus;
 
@@ -345,7 +345,7 @@ public abstract class AbstractQueuedSynchronizer
             compareAndSetNext(pred, predNext, null);
         } else { // 当前节点不是尾节点
             int ws;
-            //
+            // 把前驱节点设置为下一个获取锁的节点
             if (pred != head &&
                 ((ws = pred.waitStatus) == Node.SIGNAL ||
                  (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&
@@ -354,7 +354,7 @@ public abstract class AbstractQueuedSynchronizer
                 if (next != null && next.waitStatus <= 0)
                     compareAndSetNext(pred, predNext, next);
             } else {
-                // 唤醒后续线程
+                // 唤醒后继节点去竞争锁
                 unparkSuccessor(node);
             }
 
@@ -397,15 +397,6 @@ public abstract class AbstractQueuedSynchronizer
         LockSupport.park(this);
         return Thread.interrupted();
     }
-
-    /*
-     * Various flavors of acquire, varying in exclusive/shared and
-     * control modes.  Each is mostly the same, but annoyingly
-     * different.  Only a little bit of factoring is possible due to
-     * interactions of exception mechanics (including ensuring that we
-     * cancel if tryAcquire throws exception) and other control, at
-     * least not without hurting performance too much.
-     */
 
     /**
      * 指定节点尝试获取锁
@@ -881,16 +872,13 @@ public abstract class AbstractQueuedSynchronizer
      * 判断等待队列是否由前驱节点
      */
     public final boolean hasQueuedPredecessors() {
-        // The correctness of this depends on head being initialized
-        // before tail and on head.next being accurate if the current
-        // thread is first in queue.
-        Node t = tail; // Read fields in reverse initialization order
+        Node t = tail;
         Node h = head;
         Node s;
         /**
          * h == t 头节点等于尾节点，证明队列无节点
          * h.next == null 证明队列无节点
-         * h.next.thread != Thread.currentThread())
+         * h.next.thread != Thread.currentThread()
          */
         return h != t &&
             ((s = h.next) == null || s.thread != Thread.currentThread());
