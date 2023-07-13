@@ -267,6 +267,7 @@ public abstract class AbstractQueuedSynchronizer
 
         for (;;) {
             Node h = head;
+            // CLH队列里有节点
             if (h != null && h != tail) {
                 int ws = h.waitStatus;
                 if (ws == Node.SIGNAL) {
@@ -278,47 +279,27 @@ public abstract class AbstractQueuedSynchronizer
                          !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
                     continue;                // loop on failed CAS
             }
+            // 头节点改变，证明CLH队列中的一个节点拿到了共享锁，再次循环让下一个共享节点拿到共享锁
             if (h == head)                   // loop if head changed
                 break;
         }
     }
 
     /**
-     * Sets head of queue, and checks if successor may be waiting
-     * in shared mode, if so propagating if either propagate > 0 or
-     * PROPAGATE status was set.
-     *
-     * @param node the node
-     * @param propagate the return value from a tryAcquireShared
+     * 将头节点设置为传播唤醒，propagate一定是个非负数
      */
     private void setHeadAndPropagate(Node node, int propagate) {
-        Node h = head; // Record old head for check below
+        Node h = head;
         setHead(node);
-        /*
-         * Try to signal next queued node if:
-         *   Propagation was indicated by caller,
-         *     or was recorded (as h.waitStatus either before
-         *     or after setHead) by a previous operation
-         *     (note: this uses sign-check of waitStatus because
-         *      PROPAGATE status may transition to SIGNAL.)
-         * and
-         *   The next node is waiting in shared mode,
-         *     or we don't know, because it appears null
-         *
-         * The conservatism in both of these checks may cause
-         * unnecessary wake-ups, but only when there are multiple
-         * racing acquires/releases, so most need signals now or soon
-         * anyway.
-         */
+
         if (propagate > 0 || h == null || h.waitStatus < 0 ||
             (h = head) == null || h.waitStatus < 0) {
             Node s = node.next;
+            // 如果此时队列的第一个节点是共享节点
             if (s == null || s.isShared())
                 doReleaseShared();
         }
     }
-
-    // Utilities for various versions of acquire
 
     /**
      * 取消请求锁
@@ -494,10 +475,10 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Acquires in shared uninterruptible mode.
-     * @param arg the acquire argument
+     * 获取共享锁
      */
     private void doAcquireShared(int arg) {
+        // 封装成共享节点添加进CLH队列
         final Node node = addWaiter(Node.SHARED);
         boolean failed = true;
         try {
@@ -505,7 +486,9 @@ public abstract class AbstractQueuedSynchronizer
             for (;;) {
                 final Node p = node.predecessor();
                 if (p == head) {
+                    // 第一个节点就再次尝试获取锁
                     int r = tryAcquireShared(arg);
+                    // r >= 0 表示获取读锁成功，没有等于0的情况，成功1，失败-1
                     if (r >= 0) {
                         setHeadAndPropagate(node, r);
                         p.next = null; // help GC
@@ -613,7 +596,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     *
+     * 尝试获取共享锁
      */
     protected int tryAcquireShared(int arg) {
         throw new UnsupportedOperationException();
@@ -685,17 +668,10 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Acquires in shared mode, ignoring interrupts.  Implemented by
-     * first invoking at least once {@link #tryAcquireShared},
-     * returning on success.  Otherwise the thread is queued, possibly
-     * repeatedly blocking and unblocking, invoking {@link
-     * #tryAcquireShared} until success.
-     *
-     * @param arg the acquire argument.  This value is conveyed to
-     *        {@link #tryAcquireShared} but is otherwise uninterpreted
-     *        and can represent anything you like.
+     * 获取共享锁
      */
     public final void acquireShared(int arg) {
+        // 尝试获取共享锁失败了
         if (tryAcquireShared(arg) < 0)
             doAcquireShared(arg);
     }
@@ -746,13 +722,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Releases in shared mode.  Implemented by unblocking one or more
-     * threads if {@link #tryReleaseShared} returns true.
-     *
-     * @param arg the release argument.  This value is conveyed to
-     *        {@link #tryReleaseShared} but is otherwise uninterpreted
-     *        and can represent anything you like.
-     * @return the value returned from {@link #tryReleaseShared}
+     * 释放共享锁
      */
     public final boolean releaseShared(int arg) {
         if (tryReleaseShared(arg)) {
@@ -852,13 +822,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Returns {@code true} if the apparent first queued thread, if one
-     * exists, is waiting in exclusive mode.  If this method returns
-     * {@code true}, and the current thread is attempting to acquire in
-     * shared mode (that is, this method is invoked from {@link
-     * #tryAcquireShared}) then it is guaranteed that the current thread
-     * is not the first queued thread.  Used only as a heuristic in
-     * ReentrantReadWriteLock.
+     * 队列中的第一个节点是不是共享节点
      */
     final boolean apparentlyFirstQueuedIsExclusive() {
         Node h, s;
