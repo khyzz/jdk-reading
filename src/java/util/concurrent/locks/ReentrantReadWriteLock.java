@@ -143,7 +143,7 @@ public class ReentrantReadWriteLock
                 setState(c + acquires);
                 return true;
             }
-            // 判断此时的线程是否需要阻塞，具体实现交由子类，如果需要阻塞，证明写锁已经被抢占了，写锁是独占锁直接返回false
+            // 判断此时的线程是否需要阻塞，具体实现交由子类，如果需要阻塞，证明写锁已经被抢占了或者有等待节点，直接返回false
             if (writerShouldBlock() ||
                 !compareAndSetState(c, c + acquires))
                 return false;

@@ -1126,37 +1126,22 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Condition implementation for a {@link
-     * AbstractQueuedSynchronizer} serving as the basis of a {@link
-     * Lock} implementation.
-     *
-     * <p>Method documentation for this class describes mechanics,
-     * not behavioral specifications from the point of view of Lock
-     * and Condition users. Exported versions of this class will in
-     * general need to be accompanied by documentation describing
-     * condition semantics that rely on those of the associated
-     * {@code AbstractQueuedSynchronizer}.
-     *
-     * <p>This class is Serializable, but all fields are transient,
-     * so deserialized conditions have no waiters.
+     * 类似于Node节点，FIFO队列
      */
     public class ConditionObject implements Condition, java.io.Serializable {
         private static final long serialVersionUID = 1173984872572414699L;
-        /** First node of condition queue. */
+        /** 第一个节点 */
         private transient Node firstWaiter;
-        /** Last node of condition queue. */
+        /** 最后一个节点 */
         private transient Node lastWaiter;
 
-        /**
-         * Creates a new {@code ConditionObject} instance.
-         */
+
         public ConditionObject() { }
 
         // Internal methods
 
         /**
-         * Adds a new waiter to wait queue.
-         * @return its new wait node
+         * 添加元素进队列
          */
         private Node addConditionWaiter() {
             Node t = lastWaiter;
